@@ -67,7 +67,7 @@ class MultiheadAttention(nn.Module):
         assert embed_dim == self.n_embed, f"Input embedding dim ({embed_dim}) must match layer embedding dim {self.n_embed}"
 
         queries, keys, values = self._split_head(
-            queries, keys, values, batch_size, self.n_heads, seq_len, self.head_dim)
+            queries, keys, values, batch_size, seq_len)
 
         # compute scaled dot-product attention
         queries = queries.transpose(1, 2).contiguous().view(
@@ -91,13 +91,11 @@ class MultiheadAttention(nn.Module):
                     keys: Tensor,
                     values: Tensor,
                     batch_size: int,
-                    heads: int,
-                    seq_len: int,
-                    head_dim: int) -> Tuple[Tensor, Tensor, Tensor]:
+                    seq_len: int) -> Tuple[Tensor, Tensor, Tensor]:
 
-        queries = queries.view(batch_size, seq_len, heads, head_dim)
-        keys = keys.view(batch_size, seq_len, heads, head_dim)
-        values = values.view(batch_size, seq_len, heads, head_dim)
+        queries = queries.view(batch_size, seq_len, self.n_heads, self.head_dim)
+        keys = keys.view(batch_size, seq_len, self.n_heads, self.head_dim)
+        values = values.view(batch_size, seq_len, self.n_heads, self.head_dim)
 
         return queries, keys, values
 
@@ -105,14 +103,12 @@ class MultiheadAttention(nn.Module):
                     attn: Tensor,
                     weights: Tensor,
                     batch_size: int,
-                    heads: int,
-                    seq_len: int,
-                    head_dim: int) -> Tuple[Tensor, Tensor]:
+                    seq_len: int) -> Tuple[Tensor, Tensor]:
 
-        attn = attn.view(batch_size, heads, seq_len, head_dim).transpose(1, 2)
-        attn = attn.contiguous().view(batch_size, seq_len, heads*head_dim)
+        attn = attn.view(batch_size, self.n_heads, seq_len, self.head_dim).transpose(1, 2)
+        attn = attn.contiguous().view(batch_size, seq_len, self.n_heads*self.head_dim)
 
-        weights = weights.view(batch_size, heads, seq_len, seq_len)
+        weights = weights.view(batch_size, self.n_heads, seq_len, seq_len)
 
         return attn, weights
 
@@ -219,7 +215,7 @@ class Decoder(nn.Module):
                                                   n_heads=config.n_heads,
                                                   residual_dropout=config.residual_dropout,
                                                   layer_norm_epsilon=config.layer_norm_epsilon)
-                                     for _ in range(config.n_layer)])
+                                     for _ in range(config.n_layers)])
 
     def forward(self,
                 x: Tensor,
