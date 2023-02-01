@@ -1,0 +1,13 @@
+evaluate
+loguru
+pytorch-lightning
+nltk
+numpy
+underthesea
+sentencepiece
+scikit-learn
+torch
+transformers
+rouge-score
+pandas
+wandb
