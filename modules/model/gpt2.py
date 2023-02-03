@@ -64,25 +64,20 @@ class MultiheadAttention(nn.Module):
                 mask=None) -> Tuple[Tensor, Tensor]:
 
         batch_size, seq_len, embed_dim = keys.size()
-        assert embed_dim == self.n_embed, f"Input embedding dim ({embed_dim}) must match layer embedding dim {self.n_embed}"
+        assert embed_dim == self.n_embeds, f"Input embedding dim ({embed_dim}) must match layer embedding dim {self.n_embeds}"
 
-        queries, keys, values = self._split_head(
-            queries, keys, values, batch_size, seq_len)
+        queries, keys, values = self._split_head(queries, keys, values, batch_size, seq_len)
 
         # compute scaled dot-product attention
-        queries = queries.transpose(1, 2).contiguous().view(
-            batch_size*self.n_heads, seq_len, self.head_dim)
-        keys = keys.transpose(1, 2).contiguous().view(
-            batch_size*self.n_heads, seq_len, self.head_dim)
-        values = values.transpose(1, 2).contiguous().view(
-            batch_size*self.n_heads, seq_len, self.head_dim)
+        queries = queries.transpose(1, 2).contiguous().view(batch_size*self.n_heads, seq_len, self.head_dim)
+        keys = keys.transpose(1, 2).contiguous().view(batch_size*self.n_heads, seq_len, self.head_dim)
+        values = values.transpose(1, 2).contiguous().view(batch_size*self.n_heads, seq_len, self.head_dim)
 
         # attention size of: [batch_size*n_heads, seq_len, head_dim]
         # weights size of: [batch_size*n_heads, seq_len, seq_len]
         attn, weights = scaled_dot_product(queries, keys, values, self.n_heads, mask)
 
-        attn, weights = self._merge_head(
-            attn, weights, batch_size, self.n_heads, seq_len, self.head_dim)
+        attn, weights = self._merge_head(attn, weights, batch_size, seq_len)
 
         return self.fc(attn), weights
 

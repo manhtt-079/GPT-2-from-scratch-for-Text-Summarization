@@ -22,6 +22,8 @@ class GPT2_TextSum(pl.LightningModule):
     def __init__(self, config: Config, random_state: int):
         super(GPT2_TextSum, self).__init__()
         self.config = config
+        self.random_state = random_state
+        
         self.gpt2 = GPT2Model(config=self.config.model_args)        
         logger.info(f"Loading tokenizer: {self.config.model_args.model_checkpoint}")
         self.tokenizer = AutoTokenizer.from_pretrained(self.config.model_args.model_checkpoint)
@@ -34,7 +36,6 @@ class GPT2_TextSum(pl.LightningModule):
         
         self.num_training_steps = len(self.train_dataloader()) // self.config.trainer_args.accumulate_grad_batches * self.config.trainer_args.max_epochs
         self.num_warmup_steps = int(self.config.trainer_args.warmup_ratio * self.num_training_steps)
-        self.random_state = random_state
 
     def configure_loss_func(self, loss_func: str) -> nn.Module:
         """Create loss function based on ``loss_func`` name
@@ -65,23 +66,21 @@ class GPT2_TextSum(pl.LightningModule):
     def setup(self, stage):
         self.make_dir(dir_path=self.log_dir)
         self.make_dir(dir_path=self.checkpoint)
-        
-        self.freeze_layers()
-        
+
         return True
     
-    def get_dataloader(self, mode: str):
+    def get_dataloader(self, mode: str, shuffle: bool = False):
 
         return dataset(tokenizer=self.tokenizer,
-                       model=mode,
+                       mode=mode,
                        file_path=self.config.dataset_args.file_path,
                        max_seq_length=self.config.dataset_args.max_seq_length,
-                       random_state=self.random_state,
+                       shuffle=shuffle,
                        batch_size=self.config.trainer_args.batch_size,
                        num_workers=self.config.trainer_args.num_workers)
 
     def train_dataloader(self):
-        return self.get_dataloader(mode='train')
+        return self.get_dataloader(mode='train', shuffle=True)
 
     def val_dataloader(self):
         return self.get_dataloader(mode='valid')
@@ -111,7 +110,7 @@ class GPT2_TextSum(pl.LightningModule):
         return [optimizer], [{'scheduler': scheduler, 'interval': 'step'}]
 
     def compute_loss(self, batch: Iterator):
-        logits = self.gpt2(batch['input_ids'], self.tokenizer.pad_token_id)
+        logits = self.gpt2(batch['input_ids'], self.tokenizer.pad_token_id)[0]
         logits = logits[:, :-1].contiguous().view(-1, logits.size(-1))
 
         loss = self.loss_func(logits, batch['label'][:, 1:].contiguous().view(-1))
@@ -121,7 +120,7 @@ class GPT2_TextSum(pl.LightningModule):
     def training_step(self, batch: Iterator, batch_idx):
         loss: torch.Tensor = self.compute_loss(batch=batch)
         
-        self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+        self.log('train_loss', loss)
         return loss
     
     def validation_step(self, batch: Iterator, batch_idx):
@@ -134,7 +133,7 @@ class GPT2_TextSum(pl.LightningModule):
     def validation_epoch_end(self, validation_step_outputs):
         loss = torch.stack([batch for batch in validation_step_outputs]).mean()
         
-        self.log('val_loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+        self.log('val_loss', loss, on_epoch=True, prog_bar=True, logger=True)
     
     def forward(self, x: Dict[str, torch.Tensor]):
         outputs = self.exab.model.generate(
@@ -174,7 +173,7 @@ def main(config: Config, project: str, random_state: int):
 
     checkpoint_callback = ModelCheckpoint(
         dirpath=config.trainer_args.checkpoint,
-        filename=config.model_name+'-{epoch}-{step}-{val_loss:.2f}',
+        filename=config.model_args.model_checkpoint+'-{epoch}-{step}-{val_loss:.2f}',
         monitor=config.trainer_args.monitor,
         mode='min',
         save_top_k=config.trainer_args.save_top_k,
@@ -182,7 +181,7 @@ def main(config: Config, project: str, random_state: int):
     )
     
     trainer = Trainer(
-        enable_progress_bar=False,
+        enable_progress_bar=config.trainer_args.enable_progess_bar,
         accelerator=config.trainer_args.accelerator,
         devices=config.trainer_args.devices,
         accumulate_grad_batches=config.trainer_args.accumulate_grad_batches,
@@ -203,12 +202,6 @@ def main(config: Config, project: str, random_state: int):
     gc.collect()
     model = GPT2_TextSum(config, random_state=random_state)
     trainer.fit(model)
-    
-    # logger.info('----- Testing -----')
-    # predictions = trainer.predict(dataloaders=model.test_dataloader(), ckpt_path='best')
-    # rouge_scores = pd.DataFrame(predictions).mean().to_dict()
-    # logger.info(rouge_scores)
-
 
  
 if __name__=='__main__':
@@ -222,5 +215,5 @@ if __name__=='__main__':
     seed_everything(args.seed)
     
     config = Config(config_file=args.config_file)
-    main(config=config, project=args.project, random_state=args.random_state)
+    main(config=config, project=args.project, random_state=args.seed)
     

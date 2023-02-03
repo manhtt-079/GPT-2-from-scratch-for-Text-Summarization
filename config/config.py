@@ -5,6 +5,9 @@ from dataclasses import dataclass
 class DatasetArgs:
     max_seq_length: int
     file_path: str
+
+    def __post_init__(self):
+        self.max_seq_length = int(self.max_seq_length)
     
 @dataclass
 class ModelArgs:
@@ -59,7 +62,6 @@ class TrainerArgs(object):
         self.lr = float(self.config['trainer']['lr'])
         self.losses = self.config['trainer']['losses']
         self.max_epochs = int(self.config['trainer']['max_epochs'])
-        self.num_beams = int(self.config['trainer']['num_beams'])
         self.num_workers = int(self.config['trainer']['num_workers'])
         self.patience = int(self.config['trainer']['patience'])
         self.precision = int(self.config['trainer']['precision'])
@@ -98,7 +100,7 @@ class Config(object):
     
     @property
     def dataset_args(self):
-        return DatasetArgs(self.config['dataset'])
+        return DatasetArgs(**self.config['dataset'])
    
 if __name__=='__main__':
     pass
