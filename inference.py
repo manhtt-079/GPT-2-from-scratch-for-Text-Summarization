@@ -1,11 +1,8 @@
 import argparse
-import os
 import torch
 import torch.nn as nn
 from transformers import top_k_top_p_filtering
 from trainer import GPT2_TextSum
-
-from config.config import Config
 
 def summary(text: str,
             device: torch.device,
@@ -21,7 +18,7 @@ def summary(text: str,
         punc_idx = 8
         punc_count = 0
         for _ in range(summary_max_len):
-            last_logit = model(tokens).logits[:, -1]
+            last_logit = model.gpt2(tokens).logits[:, -1]
 
             filter = top_k_top_p_filtering(last_logit, top_k=50, top_p=1.0)
             props = nn.functional.softmax(filter, dim=-1)
