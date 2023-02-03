@@ -1,4 +1,4 @@
-# Implement GPT-2 from scratch for text summarization
+# Implement GPT-2 medium from scratch for text summarization
 
 ## Directory
     ├── checkpoint/
